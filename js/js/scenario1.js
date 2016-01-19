@@ -435,6 +435,33 @@
         displayStatus("To clipboard: " + alt);
     }
 
+    // Helper
+    function getStrokeBounds(strokes) {
+        var x1 = world.width(), y1 = world.height(), x2 = 0, y2 = 0;
+        strokes.forEach(function (stroke) {
+            if (stroke.boundingRect.x < x1) {
+                x1 = stroke.boundingRect.x;
+            }
+            if (stroke.boundingRect.y < y1) {
+                y1 = stroke.boundingRect.y;
+            }
+            if (stroke.boundingRect.x + stroke.boundingRect.width > x2) {
+                x2 = stroke.boundingRect.x + stroke.boundingRect.width;
+            }
+            if (stroke.boundingRect.y + stroke.boundingRect.height > y2) {
+                y2 = stroke.boundingRect.y + stroke.boundingRect.height;
+            }
+        });
+        return new Rectangle(x1, y1, x2, y2);
+    }
+
+    function deleteStrokes(strokes) {
+        strokes.forEach(function (stroke) {
+            stroke.selected = true
+        });
+        inkManager.deleteSelected();
+    }
+
     function recognizeStrokesOnWorld(texts, strokes) {
         var m;
         texts.filter(function (ea) {
@@ -459,27 +486,11 @@
         });
 
         if (m) {
-            var x1 = world.width(), y1 = world.height(), x2 = 0, y2 = 0;
-            strokes.forEach(function (stroke) {
-                stroke.selected = true;
-
-                if (stroke.boundingRect.x < x1) {
-                    x1 = stroke.boundingRect.x;
-                }
-                if (stroke.boundingRect.y < y1) {
-                    y1 = stroke.boundingRect.y;
-                }
-                if (stroke.boundingRect.x + stroke.boundingRect.width > x2) {
-                    x2 = stroke.boundingRect.x + stroke.boundingRect.width;
-                }
-                if (stroke.boundingRect.y + stroke.boundingRect.height > y2) {
-                    y2 = stroke.boundingRect.y + stroke.boundingRect.height;
-                }
-            });
-            inkManager.deleteSelected();
+            var bounds = getStrokeBounds(strokes);
+            deleteStrokes(strokes);
             m.isDraggable = true;
-            m.setPosition(new Point(x1, y1));
-            m.setExtent(new Point(x2, y2).subtract(new Point(x1, y1)));
+            m.setPosition(bounds.topLeft());
+            m.setExtent(bounds.extent());
             world.add(m);
         } else {
             // do nothing, leave the stroke where it is
@@ -491,10 +502,7 @@
         if (!(code.endsWith("()") || code.endsWith(";"))) {
             code = code + "()"
         }
-        strokes.forEach(function (stroke) {
-            stroke.selected = true;
-        });
-        inkManager.deleteSelected();
+        deleteStrokes(strokes);
         displayStatus("sending " + code);
         try {
             eval("target." + code);
@@ -549,6 +557,10 @@
             }
         );
     };
+
+    function showProposals(strokes, texts) {
+
+    }
 
     var page = WinJS.UI.Pages.define("/html/scenario1.html", {
         ready: function (element, options) {
