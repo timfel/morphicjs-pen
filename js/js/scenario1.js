@@ -530,6 +530,72 @@
         return a;
     }
 
+    function getSymbolicFunction(text) {
+        switch (text) {
+            case "x":
+            case "X":
+                return ["destroy"]
+            case ">":
+                return ["moveBy(new Point(10,0))"]
+            case "<":
+                return ["moveBy(new Point(-10,0))"]
+            case "^":
+                return ["moveBy(new Point(0,-10))"]
+            case "/":
+                return ["moveBy(new Point(10,-10))"]
+            case "\\":
+                return ["moveBy(new Point(10,10))"]
+            default:
+                return []
+        }
+    }
+
+    function sendMessage(target, text) {
+        var names = getParamNames(target[text]);
+        if (names.length === 0) return target[text]();
+        var pos = recognitionMenu.position();
+
+        var parammorphs = [];
+        function makeArgs(s, last) {
+            var m = new TextMorph(s + (last ? ")" : ","), 48, undefined, undefined, true);
+            m.backgroundColor = (new Color(230, 230, 230));
+            m.setPosition(pos);
+            pos = pos.add(new Point(m.width() + 4, 0));
+            m.isParameter = true;
+            world.add(m);
+            m.changed();
+            m.drawNew();
+            m.changed();
+            parammorphs.push(m);
+        }
+
+        var m = new TextMorph(text + "(", 48, undefined, true);
+        m.backgroundColor = (new Color(230, 230, 230));
+        m.setPosition(pos);
+        pos = pos.add(new Point(m.width() + 2, 0));
+        m.mouseClickLeft = function () {
+            var message = text + "(";
+            parammorphs.forEach(function (m, idx) {
+                message = message + m.text;
+                m.destroy()
+            });
+            m.destroy();
+            try {
+                eval("target." + message);
+            } catch (e) {
+                world.inform("Could not eval target." + text + "(). The error was " + e);
+            }
+        };
+        world.add(m);
+        m.changed();
+        m.drawNew();
+        m.changed();
+
+        names.forEach(function (name, idx) {
+            makeArgs(name, idx === names.length - 1);
+        });
+    }
+
     var recognitionMenu;
     function showStrokeRecognitions(result) {
         var strokes = result.getStrokes();
@@ -561,44 +627,51 @@
             }
         }
 
-        function sendMessage(target, text) {
-            var names = getParamNames(target[text]);
-            names.forEach(function () {
-                
-            });
-            target[text]();
-        }
-
         var list = [];
-        result.getTextCandidates().forEach(function (text) {
-            if (text.length < 2) return;
-            var funcs = fuzzyMatchFunctions(target, text);
-            list = list.concat(funcs);
-            list.push(text);
-        });
+        
+        if (!target.isParameter) {
+            result.getTextCandidates().forEach(function (text) {
+                if (text.length < 2) {
+                    list = list.concat(getSymbolicFunction(text));
+                };
+                var funcs = fuzzyMatchFunctions(target, text);
+                list = list.concat(funcs);
+                list.push(text);
+            });
 
-        list.getUnique().forEach(function (text) {
-            if (typeof (target[text]) == "function") {
+            list.getUnique().forEach(function (text) {
+                if (typeof (target[text]) == "function") {
+                    m.addItem(text, function () {
+                        try {
+                            sendMessage(target, text);
+                        } catch (e) {
+                            world.inform("Could not eval target." + text + "(). The error was " + e);
+                        }
+                        deleteStrokes(strokes);
+                    }, undefined, undefined, true);
+                } else {
+                    m.addItem(text, function () {
+                        try {
+                            eval("target." + text)
+                        } catch (e) {
+                            world.inform("Could not eval target." + text + "(). The error was " + e);
+                        }
+                        deleteStrokes(strokes);
+                    });
+                }
+            });
+        } else {
+            result.getTextCandidates().forEach(function (text) {
                 m.addItem(text, function () {
-                    try {
-                        sendMessage(target, text);
-                    } catch (e) {
-                        world.inform("Could not eval target." + text + "(). The error was " + e);
-                    }
-                    deleteStrokes(strokes);
-                }, undefined, undefined, true);
-            } else {
-                m.addItem(text, function () {
-                    try {
-                        eval("target." + text)
-                    } catch (e) {
-                        world.inform("Could not eval target." + f + "(). The error was " + e);
-                    }
+                    target.text = text + target.text.slice(target.text.length - 1, target.text.length);
+                    target.changed();
+                    target.drawNew();
+                    target.changed();
                     deleteStrokes(strokes);
                 });
-            }
-        });
-
+            });
+        }
+        
         if (m.items.length < 1) return;
         m.drawNew();
         m.addShadow(new Point(2, 2), 80);
