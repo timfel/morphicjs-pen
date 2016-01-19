@@ -201,6 +201,12 @@
     // We will accept touch down or mouse right down as the start of a touch.
     function handlePointerDown(evt) {
         if (evt.pointerType === "pen") {
+            var morph = world.topMorphAt(new Point(evt.x, evt.y));
+            if (morph instanceof MenuMorph ||
+                morph instanceof MenuItemMorph) {
+                return; // XXX: Don't draw on menu;
+            }
+
             // Anchor and clear any current selection.
             var pt = {x:0.0, y:0.0};
             inkManager.selectWithLine(pt, pt);
@@ -375,7 +381,7 @@
     // other commands can find the bounding boxes (or ink strokes) of any specific
     // word of ink.
     function recognize(thenDo) {
-        if (recognizeOperationRunning) {
+        if (recognizeOperationRunning || inkManager.getStrokes().length === 0) {
             return;
         }
         recognizeOperationRunning = true;
@@ -455,62 +461,164 @@
         return new Rectangle(x1, y1, x2, y2);
     }
 
+    // Helper
     function deleteStrokes(strokes) {
         strokes.forEach(function (stroke) {
             stroke.selected = true
         });
         inkManager.deleteSelected();
+        renderAllStrokes();
     }
 
-    function recognizeStrokesOnWorld(texts, strokes) {
-        var m;
-        texts.filter(function (ea) {
-            switch (ea) {
-                case "rectangle":
-                    m = new Morph();
-                    break;
-                case "box":
-                    m = new BoxMorph();
-                    break;
-                case "circle":
-                    m = new CircleBoxMorph();
-                    break;
-                case "slider":
-                    m = new SliderMorph();
-                    break;
-                case "string":
-                    m = new StringMorph();
+    function fuzzyMatchFunctions(object, text) {
+        if (text.length < 2) return [];
+        var list = [];
+        text = text.toLowerCase().replace(/\s+/, "");
+        for (var k in object) {
+            if (typeof (object[k]) == "function" && k.length < text.length * 2) {
+                if (levenshteinDistance(k.slice(0, text.length - 1), text) < 2) {
+                    list.push(k);
+                }
+            }
+        }
+        return list.sort();
+    }
+
+    function levenshteinDistance(a, b) {
+        if (a.length == 0) return b.length;
+        if (b.length == 0) return a.length;
+
+        var matrix = [];
+
+        // increment along the first column of each row
+        var i;
+        for (i = 0; i <= b.length; i++) {
+            matrix[i] = [i];
+        }
+
+        // increment each column in the first row
+        var j;
+        for (j = 0; j <= a.length; j++) {
+            matrix[0][j] = j;
+        }
+
+        // Fill in the rest of the matrix
+        for (i = 1; i <= b.length; i++) {
+            for (j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) == a.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, // substitution
+                                            Math.min(matrix[i][j - 1] + 1, // insertion
+                                                     matrix[i - 1][j] + 1)); // deletion
+                }
+            }
+        }
+
+        return matrix[b.length][a.length];
+    };
+
+    Array.prototype.getUnique = function () {
+        var u = {}, a = [];
+        for (var i = 0, l = this.length; i < l; ++i) {
+            if (u.hasOwnProperty(this[i])) {
+                continue;
+            }
+            a.push(this[i]);
+            u[this[i]] = 1;
+        }
+        return a;
+    }
+
+    var recognitionMenu;
+    function showStrokeRecognitions(result) {
+        var strokes = result.getStrokes();
+        if (recognitionMenu) {
+            recognitionMenu.destroy();   
+        }
+
+        var target = world.topMorphAt(new Point(strokes[0].boundingRect.x, strokes[0].boundingRect.y)),
+            m = new MenuMorph(target, '');
+
+        if (target === world) {
+            var makeMorph = function (cls) {
+                return function () {
+                    var m = new cls();
                     m.isEditable = true;
-                    break;
+                    var bounds = getStrokeBounds(strokes);
+                    m.isDraggable = true;
+                    m.setPosition(bounds.topLeft());
+                    m.setExtent(bounds.extent());
+                    world.add(m);
+                }
+            }
+            target = {
+                rectangle: makeMorph(Morph),
+                box: makeMorph(BoxMorph),
+                circle: makeMorph(CircleBoxMorph),
+                slider: makeMorph(SliderMorph),
+                string: makeMorph(StringMorph)
+            }
+        }
+
+        function sendMessage(target, text) {
+            var names = getParamNames(target[text]);
+            names.forEach(function () {
+                
+            });
+            target[text]();
+        }
+
+        var list = [];
+        result.getTextCandidates().forEach(function (text) {
+            if (text.length < 2) return;
+            var funcs = fuzzyMatchFunctions(target, text);
+            list = list.concat(funcs);
+            list.push(text);
+        });
+
+        list.getUnique().forEach(function (text) {
+            if (typeof (target[text]) == "function") {
+                m.addItem(text, function () {
+                    try {
+                        sendMessage(target, text);
+                    } catch (e) {
+                        world.inform("Could not eval target." + text + "(). The error was " + e);
+                    }
+                    deleteStrokes(strokes);
+                }, undefined, undefined, true);
+            } else {
+                m.addItem(text, function () {
+                    try {
+                        eval("target." + text)
+                    } catch (e) {
+                        world.inform("Could not eval target." + f + "(). The error was " + e);
+                    }
+                    deleteStrokes(strokes);
+                });
             }
         });
 
-        if (m) {
-            var bounds = getStrokeBounds(strokes);
-            deleteStrokes(strokes);
-            m.isDraggable = true;
-            m.setPosition(bounds.topLeft());
-            m.setExtent(bounds.extent());
-            world.add(m);
-        } else {
-            // do nothing, leave the stroke where it is
-        }
+        if (m.items.length < 1) return;
+        m.drawNew();
+        m.addShadow(new Point(2, 2), 80);
+        m.keepWithin(world);
+        world.add(m);
+        m.setPosition(new Point(strokes[0].boundingRect.x - m.maxWidth() - 80, strokes[0].boundingRect.y));
+        m.fullChanged();
+        recognitionMenu = m;
     }
 
-    function recognizeStrokesOnMorph(target, texts, strokes) {
-        var code = texts[0];
-        if (!(code.endsWith("()") || code.endsWith(";"))) {
-            code = code + "()"
-        }
-        deleteStrokes(strokes);
-        displayStatus("sending " + code);
-        try {
-            eval("target." + code);
-        } catch (e) {
-            displayStatus("error while sending " + code + ". " + e);
-        }
+    var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg;
+    var ARGUMENT_NAMES = /([^\s,]+)/g;
+    function getParamNames(func) {
+        var fnStr = func.toString().replace(STRIP_COMMENTS, '');
+        var result = fnStr.slice(fnStr.indexOf('(') + 1, fnStr.indexOf(')')).match(ARGUMENT_NAMES);
+        if (result === null)
+            result = [];
+        return result;
     }
-
+    
     // Tag the event handlers of the ToolBar so that they can be used in a declarative context.
     // For security reasons WinJS.UI.processAll and WinJS.Binding.processAll (and related) functions allow only
     // functions that are marked as being usable declaratively to be invoked through declarative processing.
@@ -534,7 +642,7 @@
                 inkCanvas = this.worldCanvas;
                 inkContext = inkCanvas.getContext("2d");
                 inkContext.lineWidth = 2;
-                inkContext.strokeStyle = "Black";
+                inkContext.strokeStyle = "Blue";
                 inkContext.lineCap = "round";
                 inkContext.lineJoin = "round";
                 inkCanvas.addEventListener("pointerdown", handlePointerDown, false);
@@ -558,15 +666,12 @@
         );
     };
 
-    function showProposals(strokes, texts) {
-
-    }
-
     var page = WinJS.UI.Pages.define("/html/scenario1.html", {
         ready: function (element, options) {
             var worldCanvas = document.getElementById('world');
             world = new WorldMorph(worldCanvas, false);
             world.isDevMode = true;
+            world.togglePreferences();
 
             var hi = new StringMorph('Hello, World!', 48, 'serif');
             hi.isDraggable = true;
@@ -586,31 +691,16 @@
             hint2.setPosition(hint1.bottomLeft());
             world.add(hint2);
 
-            var runBtn = new TriggerMorph();
-            runBtn.labelString = 'run ink';
-            runBtn.action = function () {
-                recognize(function (results) {
-                    results.forEach(function (result) {
-                        var strokes = result.getStrokes();
-                        var texts = result.getTextCandidates();
-                        var target = world.topMorphAt(new Point(strokes[0].boundingRect.x, strokes[0].boundingRect.y));
-                        if (target === world) {
-                            recognizeStrokesOnWorld(texts, strokes);
-                        } else {
-                            recognizeStrokesOnMorph(target, texts, strokes);
-                        }
-                    });
-                    renderAllStrokes();
-                });
-            };
-            runBtn.setPosition(world.bottomRight().subtract(new Point(runBtn.width(), runBtn.height())))
-            world.add(runBtn);
-
             loop();
 
             function loop() {
                 requestAnimationFrame(loop);
                 world.doOneCycle();
+                recognize(function (results) {
+                    results.forEach(function (result) {
+                        showStrokeRecognitions(result);
+                    });
+                });
             }
         }
     });
