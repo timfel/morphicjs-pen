@@ -435,6 +435,74 @@
         displayStatus("To clipboard: " + alt);
     }
 
+    function recognizeStrokesOnWorld(texts, strokes) {
+        var m;
+        texts.filter(function (ea) {
+            switch (ea) {
+                case "rectangle":
+                    m = new Morph();
+                    break;
+                case "box":
+                    m = new BoxMorph();
+                    break;
+                case "circle":
+                    m = new CircleBoxMorph();
+                    break;
+                case "slider":
+                    m = new SliderMorph();
+                    break;
+                case "string":
+                    m = new StringMorph();
+                    m.isEditable = true;
+                    break;
+            }
+        });
+
+        if (m) {
+            var x1 = world.width(), y1 = world.height(), x2 = 0, y2 = 0;
+            strokes.forEach(function (stroke) {
+                stroke.selected = true;
+
+                if (stroke.boundingRect.x < x1) {
+                    x1 = stroke.boundingRect.x;
+                }
+                if (stroke.boundingRect.y < y1) {
+                    y1 = stroke.boundingRect.y;
+                }
+                if (stroke.boundingRect.x + stroke.boundingRect.width > x2) {
+                    x2 = stroke.boundingRect.x + stroke.boundingRect.width;
+                }
+                if (stroke.boundingRect.y + stroke.boundingRect.height > y2) {
+                    y2 = stroke.boundingRect.y + stroke.boundingRect.height;
+                }
+            });
+            inkManager.deleteSelected();
+            m.isDraggable = true;
+            m.setPosition(new Point(x1, y1));
+            m.setExtent(new Point(x2, y2).subtract(new Point(x1, y1)));
+            world.add(m);
+        } else {
+            // do nothing, leave the stroke where it is
+        }
+    }
+
+    function recognizeStrokesOnMorph(target, texts, strokes) {
+        var code = texts[0];
+        if (!(code.endsWith("()") || code.endsWith(";"))) {
+            code = code + "()"
+        }
+        strokes.forEach(function (stroke) {
+            stroke.selected = true;
+        });
+        inkManager.deleteSelected();
+        displayStatus("sending " + code);
+        try {
+            eval("target." + code);
+        } catch (e) {
+            displayStatus("error while sending " + code + ". " + e);
+        }
+    }
+
     // Tag the event handlers of the ToolBar so that they can be used in a declarative context.
     // For security reasons WinJS.UI.processAll and WinJS.Binding.processAll (and related) functions allow only
     // functions that are marked as being usable declaratively to be invoked through declarative processing.
@@ -511,74 +579,13 @@
             runBtn.action = function () {
                 recognize(function (results) {
                     results.forEach(function (result) {
-                        var m = false;
                         var strokes = result.getStrokes();
                         var texts = result.getTextCandidates();
-
                         var target = world.topMorphAt(new Point(strokes[0].boundingRect.x, strokes[0].boundingRect.y));
                         if (target === world) {
-                            texts.filter(function (ea) {
-                                switch (ea) {
-                                    case "rectangle":
-                                        m = new Morph();
-                                        break;
-                                    case "box":
-                                        m = new BoxMorph();
-                                        break;
-                                    case "circle":
-                                        m = new CircleBoxMorph();
-                                        break;
-                                    case "slider":
-                                        m = new SliderMorph();
-                                        break;
-                                    case "string":
-                                        m = new StringMorph();
-                                        m.isEditable = true;
-                                        break;
-                                }
-                            });
-
-                            if (m) {
-                                var x1 = world.width(), y1 = world.height(), x2 = 0, y2 = 0;
-                                strokes.forEach(function (stroke) {
-                                    stroke.selected = true;
-
-                                    if (stroke.boundingRect.x < x1) {
-                                        x1 = stroke.boundingRect.x;
-                                    }
-                                    if (stroke.boundingRect.y < y1) {
-                                        y1 = stroke.boundingRect.y;
-                                    }
-                                    if (stroke.boundingRect.x + stroke.boundingRect.width > x2) {
-                                        x2 = stroke.boundingRect.x + stroke.boundingRect.width;
-                                    }
-                                    if (stroke.boundingRect.y + stroke.boundingRect.height > y2) {
-                                        y2 = stroke.boundingRect.y + stroke.boundingRect.height;
-                                    }
-                                });
-                                inkManager.deleteSelected();
-                                m.isDraggable = true;
-                                m.setPosition(new Point(x1, y1));
-                                m.setExtent(new Point(x2, y2).subtract(new Point(x1, y1)));
-                                world.add(m);
-                            } else {
-                                // do nothing, leave the stroke where it is
-                            }
+                            recognizeStrokesOnWorld(texts, strokes);
                         } else {
-                            var code = texts[0];
-                            if (!(code.endsWith("()") || code.endsWith(";"))) {
-                                code = code + "()"
-                            }
-                            strokes.forEach(function (stroke) {
-                                stroke.selected = true;
-                            });
-                            inkManager.deleteSelected();
-                            displayStatus("sending " + code);
-                            try {
-                                eval("target." + code);
-                            } catch (e) {
-                                displayStatus("error while sending " + code + ". " + e);
-                            }
+                            recognizeStrokesOnMorph(target, texts, strokes);
                         }
                     });
                     renderAllStrokes();
