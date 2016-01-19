@@ -90,6 +90,7 @@
     // and for lassoing (and erasing).
     var inkCanvas;
     var inkContext;
+    var world;
     
     // The "mode" of whether we are highlighting, inking, lassoing, or erasing is controlled by this global variable,
     // which should be pointing to either hlContext, inkContext, or selContext.
@@ -302,23 +303,28 @@
     // Redraws (from the beginning) all strokes in the canvases.  All canvases are erased,
     // then the paper is drawn, then all the strokes are drawn.
     function renderAllStrokes() {
-        inkContext.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
-        inkManager.getStrokes().forEach(function (stroke) {
-            var att = stroke.drawingAttributes;
-            var color = toColorString(att.color);
-            var strokeSize = att.size;
-            var width = strokeSize.width;
-            var hl = stroke.drawingAttributes.drawAsHighlighter;
-            var ctx = inkContext;
-            if (stroke.selected) {
-                renderStroke(stroke, color, width * 2, ctx);
-                var stripe = hl ? "Azure" : "White";
-                var w = width - (hl ? 3 : 1);
-                renderStroke(stroke, stripe, w, ctx);
-            } else {
-                renderStroke(stroke, color, width, ctx);
+        world.changed();
+        world.onNextStep = function () {
+            world.onNextStep = function () {
+                // silly dance - we need to wait for the update before doing this
+                inkManager.getStrokes().forEach(function (stroke) {
+                    var att = stroke.drawingAttributes;
+                    var color = toColorString(att.color);
+                    var strokeSize = att.size;
+                    var width = strokeSize.width;
+                    var hl = stroke.drawingAttributes.drawAsHighlighter;
+                    var ctx = inkContext;
+                    if (stroke.selected) {
+                        renderStroke(stroke, color, width * 2, ctx);
+                        var stripe = hl ? "Azure" : "White";
+                        var w = width - (hl ? 3 : 1);
+                        renderStroke(stroke, stripe, w, ctx);
+                    } else {
+                        renderStroke(stroke, color, width, ctx);
+                    }
+                });
             }
-        });
+        }
     }
 
     function clear() {
@@ -368,90 +374,50 @@
     // The recognition results are also stored within the ink manager itself, so that
     // other commands can find the bounding boxes (or ink strokes) of any specific
     // word of ink.
-    function recognize(evt) {
+    function recognize(thenDo) {
         if (recognizeOperationRunning) {
             return;
         }
-        // The recognizeAsync() method has 3 modes: selected, remaining, and all.
-        // This particular app cannot use "all" mode because it supports highlighting.
-        // If the user has highlighted one or more words, and we recognize in "all" mode,
-        // we will recognize all strokes, including the highlight strokes.  This usually
-        // results in a recognition string containing many asterisks.
-        // If we find that no strokes are selected, rather than running in "all" mode, we
-        // select all strokes that are not highlighting strokes, then run in "selected" mode.
-        // If some strokes were already selected, we just need to unselect any which are highlighting.
+        recognizeOperationRunning = true;
+        inkManager.recognizeAsync(Windows.UI.Input.Inking.InkRecognitionTarget.all).done(
+            function (results) {
+                // Doing a recognition does not update the storage of results (the results that are stored inside the ink manager).
+                // We do that ourselves by calling this method.
+                inkManager.updateRecognitionResults(results);
 
-        // If we DID originally find that no strokes were selected, we remember that fact, so that
-        // we can unselect them after the recognition.
-        var bSelected = false;
-        if (anySelected()) {
-            unselectHighlight();
-        } else {
-            selectAllNoHighlight();
-            bSelected = true;
-        }
+                // The arg "results" is an array of result objects representing "words", where "words" means words of ink (not computer memory words).
+                // I.e., if you write "this is a test" that is 4 words, and results will be an array of length 4.
 
-        // NOTE: check that we have some ink to recognize before calling InkManager::RecognizeAsync()
-        if (anySelected()) {
-            // About to call recognizeAsync()
-            // Prevent future calls to this API until we are done with the first call
-            recognizeOperationRunning = true;
+                var alternates = ""; // Will accumulate the result words, with spaces between
+                results.forEach(function (result) {
+                    // Method getTextCandidates() returns an array of recognition alternates (different interpretations of the same word of ink).
+                    // This is a standard JavaScript array of standard JavaScript strings.
+                    // For this program we only use the first (top) alternate in our display.
+                    // If we were doing search over this ink, we would want to search all alternates.
+                    var alts = result.getTextCandidates();
+                    alternates = alternates + " " + alts[0];
 
-            // Note that the third mode in recognizeAsync(), "recent", can be very useful in certain situations,
-            // but we are not using it here.  It will recognize all strokes that have been added since the last
-            // recognition.  If we were assuming that all strokes were writing, and we were trying to keep
-            // recognition caught up with the user's writing at all times (that is, not using a Reco button),
-            // then "recent" would be the mode we would want.
+                    // The specific strokes forming the current word of ink are available to us.
+                    // This feature is not used here, but we could, if we chose, display the ink,
+                    // with the recognition result for each word directly above the specific word of ink,
+                    // by fetching the bounding box of the recognitionResult (via the boundingRect property).
+                    // Or, if we needed to do something to each stroke in the recognized word, we could
+                    // call recognitionResult.getStrokes(), then iterate over the individual strokes.
+                });
+                displayStatus(alternates);
 
-            // Because recognition is slower, we ask for it as an asynchronous operation.
-            // The anonymous function (the first arg to the "then" method) will be called
-            // as a callback when recognition has completed.  If an error occurs, the second
-            // arg will be called.
-            inkManager.recognizeAsync(Windows.UI.Input.Inking.InkRecognitionTarget.selected).done(
-                function (results) {
-                    // Doing a recognition does not update the storage of results (the results that are stored inside the ink manager).
-                    // We do that ourselves by calling this method.
-                    inkManager.updateRecognitionResults(results);
+                if (thenDo) thenDo(results);
 
-                    // The arg "results" is an array of result objects representing "words", where "words" means words of ink (not computer memory words).
-                    // I.e., if you write "this is a test" that is 4 words, and results will be an array of length 4.
+                // Reset recognizeOperationRunning, can call recognizeAsync() once again
+                recognizeOperationRunning = false;
+            },
+            function (e) {
+                displayError("InkManager::recognizeAsync: " + e.toString());
 
-                    var alternates = ""; // Will accumulate the result words, with spaces between
-                    results.forEach(function (result) {
-                        // Method getTextCandidates() returns an array of recognition alternates (different interpretations of the same word of ink).
-                        // This is a standard JavaScript array of standard JavaScript strings.
-                        // For this program we only use the first (top) alternate in our display.
-                        // If we were doing search over this ink, we would want to search all alternates.
-                        var alts = result.getTextCandidates();
-                        alternates = alternates + " " + alts[0];
-
-                        // The specific strokes forming the current word of ink are available to us.
-                        // This feature is not used here, but we could, if we chose, display the ink,
-                        // with the recognition result for each word directly above the specific word of ink,
-                        // by fetching the bounding box of the recognitionResult (via the boundingRect property).
-                        // Or, if we needed to do something to each stroke in the recognized word, we could
-                        // call recognitionResult.getStrokes(), then iterate over the individual strokes.
-                    });
-                    displayStatus(alternates);
-
-                    // Reset recognizeOperationRunning, can call recognizeAsync() once again
-                    recognizeOperationRunning = false;
-                },
-                function (e) {
-                    displayError("InkManager::recognizeAsync: " + e.toString());
-
-                    // We still want to reset recognizeOperationRunning if an error occurs
-                    recognizeOperationRunning = false;
-                }
-            );
-            if (bSelected) {
-                // Unselect all strokes (if we originally had no selected strokes).
-                var pt = {x:0.0, y:0.0};
-                inkManager.selectWithLine(pt, pt);
+                // We still want to reset recognizeOperationRunning if an error occurs
+                recognizeOperationRunning = false;
             }
-        } else {
-            displayStatus("Must first write something.");
-        }
+        );
     }
 
     // A button click handler for recognition results buttons in the "reco" Flyout.
@@ -489,9 +455,7 @@
 
         WinJS.UI.processAll().then(
             function () {
-                var canvas = this.worldCanvas;
-
-                inkCanvas = document.getElementById("InkCanvas");
+                inkCanvas = this.worldCanvas;
                 inkContext = inkCanvas.getContext("2d");
                 inkContext.lineWidth = 2;
                 inkContext.strokeStyle = "Black";
@@ -520,29 +484,90 @@
 
     var page = WinJS.UI.Pages.define("/html/scenario1.html", {
         ready: function (element, options) {
-            var worldCanvas, world, hi, hint1, hint2;
-
-            worldCanvas = document.getElementById('world');
+            var worldCanvas = document.getElementById('world');
             world = new WorldMorph(worldCanvas, false);
             world.isDevMode = true;
 
-            hi = new StringMorph('Hello, World!', 48, 'serif');
+            var hi = new StringMorph('Hello, World!', 48, 'serif');
             hi.isDraggable = true;
             hi.isEditable = true;
             hi.setPosition(new Point(275, 200));
             world.add(hi);
 
-            hint1 = new StringMorph('right click...', 20, 'serif');
+            var hint1 = new StringMorph('right click...', 20, 'serif');
             hint1.isDraggable = true;
             hint1.isEditable = true;
             hint1.setPosition(new Point(350, 270));
             world.add(hint1);
 
-            hint2 = new StringMorph('(or double touch)', 10, 'sans-serif');
+            var hint2 = new StringMorph('(or double touch)', 10, 'sans-serif');
             hint2.isDraggable = true;
             hint2.isEditable = true;
             hint2.setPosition(hint1.bottomLeft());
             world.add(hint2);
+
+            var runBtn = new TriggerMorph();
+            runBtn.labelString = 'run ink';
+            runBtn.action = function () {
+                recognize(function (results) {
+                    results.forEach(function (result) {
+                        var m = false;
+                        var strokes = result.getStrokes();
+                        var texts = result.getTextCandidates();
+
+                        texts.filter(function (ea) {
+                            switch (ea) {
+                                case "rectangle":
+                                    m = new Morph();
+                                    break;
+                                case "box":
+                                    m = new BoxMorph();
+                                    break;
+                                case "circle":
+                                    m = new CircleBoxMorph();
+                                    break;
+                                case "slider":
+                                    m =  new SliderMorph();
+                                    break;
+                                case "string":
+                                    m = new StringMorph();
+                                    m.isEditable = true;
+                                    break;
+                            }
+                        });
+
+                        if (m) {
+                            var x1 = world.width(), y1 = world.height(), x2 = 0, y2 = 0;
+                            strokes.forEach(function (stroke) {
+                                stroke.selected = true;
+
+                                if (stroke.boundingRect.x < x1) {
+                                    x1 = stroke.boundingRect.x;
+                                }
+                                if (stroke.boundingRect.y < y1) {
+                                    y1 = stroke.boundingRect.y;
+                                }
+                                if (stroke.boundingRect.x + stroke.boundingRect.width > x2) {
+                                    x2 = stroke.boundingRect.x + stroke.boundingRect.width;
+                                }
+                                if (stroke.boundingRect.y + stroke.boundingRect.height > y2) {
+                                    y2 = stroke.boundingRect.y + stroke.boundingRect.height;
+                                }
+                            });
+                            inkManager.deleteSelected();
+                            m.isDraggable = true;
+                            m.setPosition(new Point(x1, y1));
+                            m.setExtent(new Point(x2, y2));
+                            world.add(m);
+                        } else {
+                            // do nothing, leave the stroke where it is
+                        }
+                    });
+                    renderAllStrokes();
+                });
+            };
+            runBtn.setPosition(world.bottomRight().subtract(new Point(runBtn.width(), runBtn.height())))
+            world.add(runBtn);
 
             loop();
 
