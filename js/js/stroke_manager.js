@@ -39,6 +39,11 @@
         }
     }
 
+    StrokeManager.prototype.deleteStrokes = function (strokes) {
+        strokes.forEach((stroke) => { stroke.selected = true });
+        this.inkManager.deleteSelected();
+    }
+
     StrokeManager.prototype.processPointerDown = function (pt) {
         this.inkManager.processPointerDown(pt);
     }
@@ -57,25 +62,6 @@
             stroke.size = stroke.drawingAttributes.size.width;
             return stroke;
         });
-    }
-
-    StrokeManager.prototype.getStrokeBounds = function(strokes) {
-        var x1 = Number.MAX_SAFE_INTEGER, y1 = Number.MAX_SAFE_INTEGER, x2 = 0, y2 = 0;
-        strokes.forEach((stroke) => {
-            if (stroke.boundingRect.x < x1) {
-                x1 = stroke.boundingRect.x;
-            }
-            if (stroke.boundingRect.y < y1) {
-                y1 = stroke.boundingRect.y;
-            }
-            if (stroke.boundingRect.x + stroke.boundingRect.width > x2) {
-                x2 = stroke.boundingRect.x + stroke.boundingRect.width;
-            }
-            if (stroke.boundingRect.y + stroke.boundingRect.height > y2) {
-                y2 = stroke.boundingRect.y + stroke.boundingRect.height;
-            }
-        });
-        return new Rectangle(x1, y1, x2, y2);
     }
 
     StrokeManager.prototype.recognize = function() {
@@ -138,7 +124,7 @@
                     var strokeGroups = [];
                     results.forEach((result) => {
                         strokeGroups.push(result.getStrokes());
-                        currentRecognitionResults.push(result.getTextCandidates());
+                        currentRecognitionResults.push(_.toArray(result.getTextCandidates()));
                     });
                     resolve(strokeGroups);
                 },
@@ -192,8 +178,8 @@
     }
 
     function Point(x, y, id) {
-        this.x = x;
-        this.y = y;
-        this.id = id; // line ID to which this point belongs (1,2,...)
+        this.X = x;
+        this.Y = y;
+        this.ID = id; // line ID to which this point belongs (1,2,...)
     }
 })(this)

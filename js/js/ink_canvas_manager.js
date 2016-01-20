@@ -83,7 +83,8 @@
         }
     }
 
-    InkCanvasManager.prototype.changed = function() {
+    InkCanvasManager.prototype.changed = function () {
+        this.inkMode();
         this.world.changed();
         this.world.onNextStep = () => {
             this.world.onNextStep = () => {
@@ -116,9 +117,8 @@
         }
     }
 
-    InkCanvasManager.prototype.deleteStrokes = function(strokes) {
-        strokes.forEach((stroke) => { stroke.selected = true });
-        this.inkManager.deleteSelected();
+    InkCanvasManager.prototype.deleteStrokes = function (strokes) {
+        this.strokeManager.deleteStrokes(strokes);
         this.changed();
     }
 })(this);

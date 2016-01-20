@@ -1,98 +1,103 @@
 ﻿(function () {
     "use strict";
 
-    function showStrokeRecognitions(result) {
-        var strokes = result.getStrokes();
-        if (recognitionMenu) {
-            recognitionMenu.destroy();
+    class Assistant {
+        constructor(world, inkCanvas) {
+            this.world = world;
+            this.inkCanvas = inkCanvas;
         }
 
-        var target = world.topMorphAt(new Point(strokes[0].boundingRect.x, strokes[0].boundingRect.y)),
-            m = new MenuMorph(target, '');
+        showStrokeRecognitions(result) {
+            var strokes = result.strokes;
+            if (recognitionMenu) {
+                recognitionMenu.destroy();
+            }
 
-        if (target === world) {
-            var makeMorph = function (cls) {
-                return function () {
-                    var m = new cls();
-                    m.isEditable = true;
-                    var bounds = getStrokeBounds(strokes);
-                    m.isDraggable = true;
-                    m.setPosition(bounds.topLeft());
-                    m.setExtent(bounds.extent());
-                    world.add(m);
+            var target = this.world.topMorphAt(new Point(strokes[0].boundingRect.x, strokes[0].boundingRect.y)),
+                m = new MenuMorph(target, '');
+
+            if (target === this.world) {
+                var makeMorph = (cls) => {
+                    return () => {
+                        var m = new cls();
+                        m.isEditable = true;
+                        var bounds = getStrokeBounds(strokes);
+                        m.isDraggable = true;
+                        m.setPosition(bounds.topLeft());
+                        m.setExtent(bounds.extent());
+                        this.world.add(m);
+                    }
+                }
+                target = {
+                    rectangle: makeMorph(Morph),
+                    box: makeMorph(BoxMorph),
+                    circle: makeMorph(CircleBoxMorph),
+                    slider: makeMorph(SliderMorph),
+                    string: makeMorph(StringMorph)
                 }
             }
-            target = {
-                rectangle: makeMorph(Morph),
-                box: makeMorph(BoxMorph),
-                circle: makeMorph(CircleBoxMorph),
-                slider: makeMorph(SliderMorph),
-                string: makeMorph(StringMorph)
-            }
-        }
 
-        var list = [];
+            var list = [];
 
-        if (!target.isParameter) {
-            result.getTextCandidates().forEach(function (text) {
-                if (text.length < 2) {
-                    list = list.concat(getSymbolicFunction(text));
-                };
-                var funcs = fuzzyMatchFunctions(target, text);
-                list = list.concat(funcs);
-                list.push(text);
-            });
-
-            list.getUnique().forEach(function (text) {
-                if (typeof (target[text]) == "function") {
-                    m.addItem(text, function () {
-                        try {
-                            sendMessage(target, text);
-                        } catch (e) {
-                            world.inform("Could not eval target." + text + "(). The error was " + e);
-                        }
-                        deleteStrokes(strokes);
-                    }, undefined, undefined, true);
-                } else {
-                    m.addItem(text, function () {
-                        try {
-                            eval("target." + text)
-                        } catch (e) {
-                            world.inform("Could not eval target." + text + "(). The error was " + e);
-                        }
-                        deleteStrokes(strokes);
-                    });
-                }
-            });
-        } else {
-            result.getTextCandidates().forEach(function (text) {
-                m.addItem(text, function () {
-                    target.text = text + target.text.slice(target.text.length - 1, target.text.length);
-                    target.changed();
-                    target.drawNew();
-                    target.changed();
-                    deleteStrokes(strokes);
+            if (!target.isParameter) {
+                result.textCandidates.forEach((text) => {
+                    var funcs = fuzzyMatchFunctions(target, text);
+                    list = list.concat(funcs);
+                    list.push(text);
                 });
-            });
-        }
 
-        if (m.items.length < 1) return;
-        m.drawNew();
-        m.addShadow(new Point(2, 2), 80);
-        m.keepWithin(world);
-        world.add(m);
-        m.setPosition(new Point(strokes[0].boundingRect.x - m.maxWidth() - 80, strokes[0].boundingRect.y));
-        m.fullChanged();
-        recognitionMenu = m;
+                _.uniq(list).forEach((text) => {
+                    if (typeof (target[text]) == "function") {
+                        m.addItem(text, () => {
+                            try {
+                                sendMessage(target, text, this.world);
+                            } catch (e) {
+                                debugger
+                                this.world.inform("Could not eval target." + text + "(). The error was " + e);
+                            }
+                            this.inkCanvas.deleteStrokes(strokes);
+                        }, undefined, undefined, true);
+                    } else {
+                        m.addItem(text, () => {
+                            try {
+                                eval("target." + text)
+                            } catch (e) {
+                                debugger
+                                this.world.inform("Could not eval target." + text + "(). The error was " + e);
+                            }
+                            this.inkCanvas.deleteStrokes(strokes);
+                        });
+                    }
+                });
+            } else {
+                result.textCandidates.forEach((text) => {
+                    m.addItem(text, () => {
+                        target.text = text + target.text.slice(target.text.length - 1, target.text.length);
+                        target.changed();
+                        target.drawNew();
+                        target.changed();
+                        this.inkCanvas.deleteStrokes(strokes);
+                    });
+                });
+            }
+
+            if (m.items.length < 1) return;
+            m.drawNew();
+            m.addShadow(new Point(2, 2), 80);
+            m.keepWithin(this.world);
+            this.world.add(m);
+            m.setPosition(new Point(strokes[0].boundingRect.x - m.maxWidth() - 80, strokes[0].boundingRect.y));
+            m.fullChanged();
+            recognitionMenu = m;
+        }
     }
 
-    function sendMessage(target, text) {
+    function sendMessage(target, text, world) {
         var names = getParamNames(target[text]);
         if (names.length === 0) return target[text]();
         var pos = recognitionMenu.position();
-
         var parammorphs = [];
-        function makeArgs(s, last) {
+        var makeArgs = (s, last) => {
             var m = new TextMorph(s + (last ? ")" : ","), 48, undefined, undefined, true);
             m.backgroundColor = (new Color(230, 230, 230));
             m.setPosition(pos);
@@ -109,9 +114,9 @@
         m.backgroundColor = (new Color(230, 230, 230));
         m.setPosition(pos);
         pos = pos.add(new Point(m.width() + 2, 0));
-        m.mouseClickLeft = function () {
+        m.mouseClickLeft = () => {
             var message = text + "(";
-            parammorphs.forEach(function (m, idx) {
+            parammorphs.forEach((m, idx) => {
                 message = message + m.text;
                 m.destroy()
             });
@@ -119,6 +124,7 @@
             try {
                 eval("target." + message);
             } catch (e) {
+                debugger
                 world.inform("Could not eval target." + text + "(). The error was " + e);
             }
         };
@@ -127,7 +133,7 @@
         m.drawNew();
         m.changed();
 
-        names.forEach(function (name, idx) {
+        names.forEach((name, idx) => {
             makeArgs(name, idx === names.length - 1);
         });
     }
@@ -191,4 +197,27 @@
             result = [];
         return result;
     }
+
+
+    function getStrokeBounds(strokes) {
+        var x1 = Number.MAX_SAFE_INTEGER, y1 = Number.MAX_SAFE_INTEGER, x2 = 0, y2 = 0;
+        strokes.forEach((stroke) => {
+            if (stroke.boundingRect.x < x1) {
+                x1 = stroke.boundingRect.x;
+            }
+            if (stroke.boundingRect.y < y1) {
+                y1 = stroke.boundingRect.y;
+            }
+            if (stroke.boundingRect.x + stroke.boundingRect.width > x2) {
+                x2 = stroke.boundingRect.x + stroke.boundingRect.width;
+            }
+            if (stroke.boundingRect.y + stroke.boundingRect.height > y2) {
+                y2 = stroke.boundingRect.y + stroke.boundingRect.height;
+            }
+        });
+        return new Rectangle(x1, y1, x2, y2);
+    }
+
+    this.Assistant = Assistant;
+
 }).call(this);

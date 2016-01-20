@@ -4,7 +4,8 @@
             var worldCanvas = document.getElementById('world'),
                 world = new WorldMorph(worldCanvas, true),
                 strokeManager = new StrokeManager(new PDollarRecognizer()),
-                inkCanvasManager = new InkCanvasManager(world, strokeManager);
+                inkCanvasManager = new InkCanvasManager(world, strokeManager),
+                assistant = new Assistant(world, inkCanvasManager);
 
             world.isDevMode = true;
             world.togglePreferences();
@@ -35,7 +36,7 @@
                 world.doOneCycle();
                 strokeManager.recognize().then((results) => {
                     results.forEach((result) => {
-                        strokeManager.showStrokeRecognitions(result);
+                        assistant.showStrokeRecognitions(result);
                     });
                 });
             }
