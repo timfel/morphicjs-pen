@@ -3,7 +3,8 @@
         ready: function (element, options) {
             var worldCanvas = document.getElementById('world'),
                 world = new WorldMorph(worldCanvas, true),
-                strokeManager = new StrokeManager(world);
+                strokeManager = new StrokeManager(new PDollarRecognizer()),
+                inkCanvasManager = new InkCanvasManager(world, strokeManager);
 
             world.isDevMode = true;
             world.togglePreferences();
@@ -32,11 +33,11 @@
             function loop() {
                 requestAnimationFrame(loop);
                 world.doOneCycle();
-                //recognize(function (results) {
-                //    results.forEach(function (result) {
-                //        showStrokeRecognitions(result);
-                //    });
-                //});
+                strokeManager.recognize().then((results) => {
+                    results.forEach((result) => {
+                        strokeManager.showStrokeRecognitions(result);
+                    });
+                });
             }
         }
     });

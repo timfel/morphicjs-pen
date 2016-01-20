@@ -83,14 +83,17 @@
     <Content Include="..\..\..\SharedContent\js\css\default.css">
       <Link>css\default.css</Link>
     </Content>
+    <Content Include="js\assistant.js" />
     <Content Include="js\morphic.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="js\morphic_ext.js" />
-    <Content Include="js\recognizers.js" />
+    <Content Include="js\pdollar.js" />
+    <Content Include="js\pdollar_ext.js" />
+    <Content Include="js\stroke_manager.js" />
     <Content Include="js\sample-configuration.js" />
     <Content Include="js\scenario1.js" />
-    <Content Include="js\stroke_manager.js" />
+    <Content Include="js\ink_canvas_manager.js" />
     <Content Include="..\..\..\SharedContent\js\Microsoft.WinJS\css\ui-dark.css">
       <Link>Microsoft.WinJS.4.0\css\ui-dark.css</Link>
     </Content>
@@ -130,6 +133,7 @@
     <Content Include="..\..\..\SharedContent\js\sample-utils\scenario-select.html">
       <Link>sample-utils\scenario-select.html</Link>
     </Content>
+    <Content Include="js\underscore.js" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\$(WMSJSProjectDirectory)\Microsoft.VisualStudio.$(WMSJSProject).targets" />
   <!-- To modify your build process, add your task inside one of the targets below then uncomment
