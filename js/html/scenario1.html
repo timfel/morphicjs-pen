@@ -9,56 +9,17 @@ Copyright (c) Microsoft Corporation. All rights reserved
     <title></title>
     <link rel="stylesheet" href="/css/scenario1.css">
     <script src="/js/morphic.js"></script>
+    <script src="/js/morphic_ext.js"></script>
+    <script src="/js/stroke_manager.js"></script>
     <script src="/js/scenario1.js"></script>
 </head>
 
 <body class="win-type-body">
     <div id="scenarioView">
-        <div id="scenarioHeader">
-            <h2 id="sampleHeader" class="win-type-subheader">Description:</h2>
-            <div id="scenarioDescription">
-                Demonstrates use of Ink and Reco APIs.
-            </div>
-        </div>
         <div id="scenarioContent">
             <!-- These 3 canvases are displayed directly on top of each other.
                     The exact height will be computed during inkInitialize().           -->
             <canvas id="world" tabindex="1" width="800" height="600" style="position: absolute; background-color: #0094ff"></canvas>
-
-            <!-- the word item is a dummy, invisible <div> that we position on the selected word.
-                    we use it as a marker for the position of the ink in the selected word, since the recoflyout must be positioned relative to an html element.    -->
-
-            <div id="Word" aria-label="word" aria-live="polite" role="region"></div>
-
-            <!-- this toolbar is displayed across the bottom of the screen.
-                    the color buttons have ids which are the names of colors; the id of each one is fed directly into the strokestyle of the corresponding canvas.-->
-
-            <div id="ToolBar" data-win-control="winjs.ui.toolbar">
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;reco&apos;,label:&apos;recognition&apos;,icon:&apos;characters&apos;,section:&apos;primary&apos;,onclick:ink.recognize,tooltip:&apos;recognize handwriting&apos;,priority:1}" class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;find&apos;,label:&apos;find&apos;,       icon:&apos;find&apos;,      section:&apos;primary&apos;,type:&apos;flyout&apos;,flyout:&apos;findflyout&apos;,tooltip:&apos;find handwritten text&apos;,priority:1}"
-                class="win-button"></button>
-                <hr data-win-control="winjs.ui.command" data-win-options="{type:&apos;separator&apos;}">
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;modeerase&apos;, label:&apos;erase&apos;, icon:&apos;clear&apos;,    onclick:ink.erasemode, section:&apos;primary&apos;,tooltip:&apos;switch pen tip to eraser mode&apos;,priority:2}"
-                class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;modeselect&apos;,label:&apos;select&apos;,icon:&apos;selectall&apos;,onclick:ink.selectmode,section:&apos;primary&apos;,tooltip:&apos;switch pen tip to lasso mode&apos;,priority:2}"
-                class="win-button"></button>
-                <hr data-win-control="winjs.ui.command" data-win-options="{type:&apos;separator&apos;}">
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;inkcolors&apos;,label:&apos;color&apos;,icon:&apos;fontcolor&apos;,section:&apos;primary&apos;,type:&apos;flyout&apos;,flyout:&apos;inkcolorflyout&apos;,tooltip:&apos;choose ink color&apos;,priority:2}"
-                class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;inkwidth&apos;, label:&apos;width&apos;,icon:&apos;edit&apos;,     section:&apos;primary&apos;,type:&apos;flyout&apos;,flyout:&apos;inkwidthflyout&apos;,tooltip:&apos;choose ink width&apos;,priority:2}"
-                class="win-button"></button>
-                <hr data-win-control="winjs.ui.command" data-win-options="{type:&apos;separator&apos;}">
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;highlightcolors&apos;,label:&apos;highlight color&apos;,icon:&apos;fontcolor&apos;,section:&apos;primary&apos;,type:&apos;flyout&apos;,flyout:&apos;highlightcolorflyout&apos;,tooltip:&apos;choose highlighting color&apos;,priority:3}"
-                class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;highlightwidth&apos;, label:&apos;highlight width&apos;,icon:&apos;edit&apos;,     section:&apos;primary&apos;,type:&apos;flyout&apos;,flyout:&apos;highlightwidthflyout&apos;,tooltip:&apos;choose highlighting width&apos;,priority:3}"
-                class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;copyselected&apos;,label:&apos;copy&apos;,onclick:ink.copyselected,section:&apos;secondary&apos;}" class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;paste&apos;,label:&apos;paste&apos;,onclick:ink.paste,section:&apos;secondary&apos;}" class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;load&apos;,label:&apos;load&apos;,onclick:ink.load,section:&apos;secondary&apos;}" class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;save&apos;,label:&apos;save&apos;,onclick:ink.save,section:&apos;secondary&apos;}" class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;clear&apos;,label:&apos;clear&apos;,onclick:ink.clear,section:&apos;secondary&apos;}" class="win-button"></button>
-                <button data-win-control="winjs.ui.command" data-win-options="{id:&apos;refresh&apos;,label:&apos;refresh&apos;,onclick:ink.refresh,section:&apos;secondary&apos;}" class="win-button"></button>
-            </div>
         </div>
     </div>
 </body>

@@ -86,8 +86,11 @@
     <Content Include="js\morphic.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="js\morphic_ext.js" />
+    <Content Include="js\recognizers.js" />
     <Content Include="js\sample-configuration.js" />
     <Content Include="js\scenario1.js" />
+    <Content Include="js\stroke_manager.js" />
     <Content Include="..\..\..\SharedContent\js\Microsoft.WinJS\css\ui-dark.css">
       <Link>Microsoft.WinJS.4.0\css\ui-dark.css</Link>
     </Content>
