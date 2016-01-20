@@ -63,6 +63,7 @@
 (function (exports) {
     exports.PDollarRecognizer = PDollarRecognizer;
     PDollarRecognizer.Point = Point;
+    PDollarRecognizer.PointCloud = PointCloud;
 
     function Point(x, y, id) // constructor
     {

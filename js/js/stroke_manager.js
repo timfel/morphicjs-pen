@@ -2,10 +2,8 @@
     "use strict";
     exports.StrokeManager = StrokeManager;
 
-    var currentRecognitionResults = null;
-
     // Tied to Microsoft Ink Manager for Bezier curve fitting and stroke grouping
-    function StrokeManager() {
+    function StrokeManager(recognizers) {
         this.inkManager = new Windows.UI.Input.Inking.InkManager();
         this.drawingAttributes = new Windows.UI.Input.Inking.InkDrawingAttributes();
         this.drawingAttributes.fitToCurve = true;
@@ -16,9 +14,10 @@
                 this.inkManager.setDefaultRecognizer(msrecognizers[i]);
                 break;
             }
-        }
-        // TODO
-        this.recognizers = [new PDollarRecognizer()];
+            }
+                // TODO
+        this.recognizers = _.toArray(recognizers);
+        this.currentRecognitionResults = null;
     }
 
     StrokeManager.prototype.setLineWidth = function (s) {
@@ -66,11 +65,11 @@
 
     StrokeManager.prototype.recognize = function() {
         return new Promise((resolve, reject) => {
-            if (currentRecognitionResults !== null || this.inkManager.getStrokes().length === 0) {
+            if (this.currentRecognitionResults !== null || this.inkManager.getStrokes().length === 0) {
                 reject(Error("recognize operation already running or no strokes available"))
             } else {
-                currentRecognitionResults = [];
                 var recognizersLeftToProcess = 0;
+                this.currentRecognitionResults = [];
 
                 this.determineStrokeGroups().then(
                     (strokeGroups) => {
@@ -80,17 +79,20 @@
                                     return new Point(pt.position.x, pt.position.y, idx);
                                 });
                             }));
+                            if (this.recognizers.length === 0) {
+                                return resolve(finishRecognition(strokeGroups));
+                            }
                             this.recognizers.forEach((r) => {
                                 recognizersLeftToProcess++;
                                 r.recognizeInk(inkpoints, strokeGroup).then(
                                     (results) => {
-                                        currentRecognitionResults[resultId] = currentRecognitionResults[resultId].concat(results);
-                                        if (--recognizersLeftToProcess === 0) {
+                                        this.currentRecognitionResults[resultId] = this.currentRecognitionResults[resultId].concat(results);
+                                        if (--recognizersLeftToProcess <= 0) {
                                             resolve(finishRecognition(strokeGroups));
                                         }
                                     },
                                     (e) => {
-                                        if (--recognizersLeftToProcess === 0) {
+                                        if (--recognizersLeftToProcess <= 0) {
                                             resolve(finishRecognition(strokeGroups));
                                         }
                                         reject(e);
@@ -99,18 +101,19 @@
                         });
                     },
                     (e) => {
+                        this.currentRecognitionResults = null;
                         reject(Error("Could not determine stroke groups"));
                     }
                 )
 
-                function finishRecognition(strokeGroups) {
-                    var results = currentRecognitionResults.map((r, i) => {
+                var finishRecognition = (strokeGroups) => {
+                    var results = this.currentRecognitionResults.map((r, i) => {
                         return {
                             strokes: strokeGroups[i],
                             textCandidates: r
                         }
                     });
-                    currentRecognitionResults = null;
+                    this.currentRecognitionResults = null;
                     return results;
                 }
             }
@@ -124,7 +127,7 @@
                     var strokeGroups = [];
                     results.forEach((result) => {
                         strokeGroups.push(result.getStrokes());
-                        currentRecognitionResults.push(_.toArray(result.getTextCandidates()));
+                        this.currentRecognitionResults.push(_.toArray(result.getTextCandidates()));
                     });
                     resolve(strokeGroups);
                 },

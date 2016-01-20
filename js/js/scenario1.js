@@ -2,18 +2,7 @@
     WinJS.UI.Pages.define("/html/scenario1.html", {
         ready: function (element, options) {
             var worldCanvas = document.getElementById('world'),
-                world = new WorldMorph(worldCanvas, true),
-                inkCanvasWrapper = new InkCanvasWrapper(world.worldCanvas),
-                assistant = new Assistant(world, inkCanvasWrapper);
-
-            // morphic specific draw test and redraw logic
-            inkCanvasWrapper.drawTest = (evt) => {
-                return world.topMorphAt(new Point(evt.x, evt.y)).allowsDrawingOver();
-            }
-            inkCanvasWrapper.redrawCallback = (cb) => {
-                world.changed();
-                world.onNextStep = () => { world.onNextStep = cb };
-            }
+                world = new WorldMorph(worldCanvas, true);
 
             // setup morphic world
             world.isDevMode = true;
@@ -36,18 +25,44 @@
             hint2.isDraggable = true;
             hint2.isEditable = true;
             hint2.setPosition(hint1.bottomLeft());
-            world.add(hint2);
+            world.add(hint2)
 
+            // setup recognition and ink
+            var pDollarRecognizer = new PDollarRecognizer();
+            pDollarRecognizer.setupShapes();
+            var inkCanvasWrapper = new InkCanvasWrapper(world.worldCanvas, [pDollarRecognizer]),
+                assistant = new Assistant(world, inkCanvasWrapper),
+                assistantEnabled = false;
+
+            // morphic specific draw test and redraw logic
+            inkCanvasWrapper.onDrawStart = (evt) => {
+                return world.topMorphAt(new Point(evt.x, evt.y)).allowsDrawingOver();
+            }
+            inkCanvasWrapper.onDrawEnd = (evt) => {
+                assistantEnabled = true;
+            }
+            inkCanvasWrapper.onDelete = (evt) => {
+                assistantEnabled = false;
+            }
+            inkCanvasWrapper.onRedraw = (cb) => {
+                world.changed();
+                world.onNextStep = () => { world.onNextStep = cb };
+            }
+
+            // start running
             loop();
-
             function loop() {
                 requestAnimationFrame(loop);
                 world.doOneCycle();
-                inkCanvasWrapper.recognize().then((results) => {
-                    results.forEach((result) => {
-                        assistant.showStrokeRecognitions(result);
+                if (assistantEnabled) {
+                    inkCanvasWrapper.recognize().then((results, wrapper) => {
+                        results.forEach((result) => {
+                            assistant.showHelp(result, wrapper);
+                        });
                     });
-                });
+                } else {
+                    assistant.deleteHelp();
+                }
             }
         }
     });

@@ -1,42 +1,49 @@
 ﻿(function () {
     "use strict";
 
+    function makeTarget(morph) {
+        var t = {
+            "add as Morph": function () {
+                // TODO
+            },
+            "make a Rectangle": function() {
+                var m = new Morph();
+                m.isEditable = true;
+                var bounds = getStrokeBounds(strokes);
+                m.isDraggable = true;
+                m.setPosition(bounds.topLeft());
+                m.setExtent(bounds.extent());
+                this.world.add(m);
+            }
+        };
+        for (var f in morph) {
+            if (typeof (f) == "function") {
+                t[f] = function () {
+                    return m[f].apply(m, arguments);
+                }
+            }
+        }
+        return t;
+    }
+
     class Assistant {
-        constructor(world, inkCanvas) {
+        constructor(world) {
             this.world = world;
-            this.inkCanvas = inkCanvas;
         }
 
-        showStrokeRecognitions(result) {
-            var strokes = result.strokes;
+        deleteHelp() {
             if (recognitionMenu) {
                 recognitionMenu.destroy();
             }
+        }
 
-            var target = this.world.topMorphAt(new Point(strokes[0].boundingRect.x, strokes[0].boundingRect.y)),
+        showHelp(result, inkCanvas) {
+            this.deleteHelp();
+            var strokes = result.strokes,
+                target = this.world.topMorphAt(new Point(strokes[0].boundingRect.x, strokes[0].boundingRect.y)),
                 m = new MenuMorph(target, '');
 
-            if (target === this.world) {
-                var makeMorph = (cls) => {
-                    return () => {
-                        var m = new cls();
-                        m.isEditable = true;
-                        var bounds = getStrokeBounds(strokes);
-                        m.isDraggable = true;
-                        m.setPosition(bounds.topLeft());
-                        m.setExtent(bounds.extent());
-                        this.world.add(m);
-                    }
-                }
-                target = {
-                    rectangle: makeMorph(Morph),
-                    box: makeMorph(BoxMorph),
-                    circle: makeMorph(CircleBoxMorph),
-                    slider: makeMorph(SliderMorph),
-                    string: makeMorph(StringMorph)
-                }
-            }
-
+            target = makeTarget(target);
             var list = [];
 
             if (!target.isParameter) {
@@ -52,20 +59,16 @@
                             try {
                                 sendMessage(target, text, this.world);
                             } catch (e) {
-                                debugger
                                 this.world.inform("Could not eval target." + text + "(). The error was " + e);
                             }
-                            this.inkCanvas.deleteStrokes(strokes);
                         }, undefined, undefined, true);
                     } else {
                         m.addItem(text, () => {
                             try {
                                 eval("target." + text)
                             } catch (e) {
-                                debugger
                                 this.world.inform("Could not eval target." + text + "(). The error was " + e);
                             }
-                            this.inkCanvas.deleteStrokes(strokes);
                         });
                     }
                 });
@@ -76,7 +79,6 @@
                         target.changed();
                         target.drawNew();
                         target.changed();
-                        this.inkCanvas.deleteStrokes(strokes);
                     });
                 });
             }
