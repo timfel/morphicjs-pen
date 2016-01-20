@@ -3,10 +3,19 @@
         ready: function (element, options) {
             var worldCanvas = document.getElementById('world'),
                 world = new WorldMorph(worldCanvas, true),
-                strokeManager = new StrokeManager(new PDollarRecognizer()),
-                inkCanvasManager = new InkCanvasManager(world, strokeManager),
-                assistant = new Assistant(world, inkCanvasManager);
+                inkCanvasWrapper = new InkCanvasWrapper(world.worldCanvas),
+                assistant = new Assistant(world, inkCanvasWrapper);
 
+            // morphic specific draw test and redraw logic
+            inkCanvasWrapper.drawTest = (evt) => {
+                return world.topMorphAt(new Point(evt.x, evt.y)).allowsDrawingOver();
+            }
+            inkCanvasWrapper.redrawCallback = (cb) => {
+                world.changed();
+                world.onNextStep = () => { world.onNextStep = cb };
+            }
+
+            // setup morphic world
             world.isDevMode = true;
             world.togglePreferences();
 
@@ -34,7 +43,7 @@
             function loop() {
                 requestAnimationFrame(loop);
                 world.doOneCycle();
-                strokeManager.recognize().then((results) => {
+                inkCanvasWrapper.recognize().then((results) => {
                     results.forEach((result) => {
                         assistant.showStrokeRecognitions(result);
                     });

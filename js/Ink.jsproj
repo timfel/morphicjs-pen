@@ -93,7 +93,7 @@
     <Content Include="js\stroke_manager.js" />
     <Content Include="js\sample-configuration.js" />
     <Content Include="js\scenario1.js" />
-    <Content Include="js\ink_canvas_manager.js" />
+    <Content Include="js\ink_canvas_wrapper.js" />
     <Content Include="..\..\..\SharedContent\js\Microsoft.WinJS\css\ui-dark.css">
       <Link>Microsoft.WinJS.4.0\css\ui-dark.css</Link>
     </Content>

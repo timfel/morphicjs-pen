@@ -17,8 +17,8 @@
                 break;
             }
         }
-
-        this.recognizers = _.toArray(arguments);
+        // TODO
+        this.recognizers = [new PDollarRecognizer()];
     }
 
     StrokeManager.prototype.setLineWidth = function (s) {
@@ -80,8 +80,8 @@
                                     return new Point(pt.position.x, pt.position.y, idx);
                                 });
                             }));
-                            recognizersLeftToProcess++;
                             this.recognizers.forEach((r) => {
+                                recognizersLeftToProcess++;
                                 r.recognizeInk(inkpoints, strokeGroup).then(
                                     (results) => {
                                         currentRecognitionResults[resultId] = currentRecognitionResults[resultId].concat(results);

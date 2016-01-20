@@ -1,10 +1,15 @@
 ﻿(function (exports) {
     "use strict";
 
-    exports.InkCanvasManager = function (morphicWorld, strokeManager) {
-        this.strokeManager = strokeManager;
-        this.world = morphicWorld;
-        this.inkCanvas = this.world.worldCanvas;
+    exports.InkCanvasWrapper = function (canvas) {
+        this.strokeManager = new StrokeManager();
+        this.drawTest = null;
+        this.redrawCallback = (cb) => {
+            this.inkCanvas.clearRect(0, 0, this.inkCanvas.width, this.inkCanvas.height);
+            cb();
+        };
+
+        this.inkCanvas = canvas;
         this.inkCanvas.addEventListener("pointerdown", this.handlePointerDown.bind(this), false);
         this.inkCanvas.addEventListener("pointerup", this.handlePointerUp.bind(this), false);
         this.inkCanvas.addEventListener("pointermove", this.handlePointerMove.bind(this), false);
@@ -22,22 +27,21 @@
         this.inkMode();
     }
 
-    InkCanvasManager.prototype.inkMode = function() {
+    InkCanvasWrapper.prototype.inkMode = function() {
         this.strokeManager.setStrokeStyle(this.inkContext.strokeStyle = "blue");
         this.strokeManager.setMode("inking");
         this.inkCanvas.style.cursor = "default";
     }
 
-    InkCanvasManager.prototype.eraserMode = function() {
+    InkCanvasWrapper.prototype.eraserMode = function() {
         this.inkContext.strokeStyle = "rgba(255,255,255,0.5)";
         this.strokeManager.setMode("erasing");
         this.inkCanvas.style.cursor = "url(images/erase.cur), auto";
     }
 
-    InkCanvasManager.prototype.handlePointerDown = function(evt) {
+    InkCanvasWrapper.prototype.handlePointerDown = function(evt) {
         if (evt.pointerType === "pen") {
-            var morph = this.world.topMorphAt(new Point(evt.x, evt.y));
-            if (!morph.allowsDrawingOver()) return;
+            if (this.drawTest && !this.drawTest(evt)) return;
 
             if (evt.currentPoint.properties.isEraser) {
                 this.eraserMode();
@@ -54,7 +58,7 @@
         }
     }
 
-    InkCanvasManager.prototype.handlePointerMove = function(evt) {
+    InkCanvasWrapper.prototype.handlePointerMove = function(evt) {
         if (evt.pointerId === this.penID) {
             this.inkContext.lineTo(evt.currentPoint.rawPosition.x, evt.currentPoint.rawPosition.y);
             this.inkContext.stroke();
@@ -70,7 +74,7 @@
         }
     }
 
-    InkCanvasManager.prototype.handlePointerUp = function(evt) {
+    InkCanvasWrapper.prototype.handlePointerUp = function(evt) {
         if (evt.pointerId === this.penID) {
             this.penID = -1;
             this.inkContext.lineTo(evt.currentPoint.rawPosition.x, evt.currentPoint.rawPosition.y);
@@ -83,17 +87,13 @@
         }
     }
 
-    InkCanvasManager.prototype.changed = function () {
+    InkCanvasWrapper.prototype.changed = function () {
         this.inkMode();
-        this.world.changed();
-        this.world.onNextStep = () => {
-            this.world.onNextStep = () => {
-                // silly dance - we need to wait for one extra tick before drawing again
-                this.strokeManager.getStrokes().forEach((stroke) => {
-                    renderStroke(stroke, stroke.color, stroke.size, this.inkContext);
-                });
-            };
-        };
+        this.redrawCallback(() => {
+            this.strokeManager.getStrokes().forEach((stroke) => {
+                renderStroke(stroke, stroke.color, stroke.size, this.inkContext);
+            });
+        });
 
         function renderStroke(stroke, color, width, ctx) {
             ctx.save();
@@ -117,8 +117,12 @@
         }
     }
 
-    InkCanvasManager.prototype.deleteStrokes = function (strokes) {
+    InkCanvasWrapper.prototype.deleteStrokes = function (strokes) {
         this.strokeManager.deleteStrokes(strokes);
         this.changed();
+    }
+
+    InkCanvasWrapper.prototype.recognize = function () {
+        return this.strokeManager.recognize();
     }
 })(this);
