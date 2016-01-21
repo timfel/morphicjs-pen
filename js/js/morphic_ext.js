@@ -23,6 +23,86 @@
         }
     }
 
+    Morph.prototype["Make shape into Morph"] = function () {
+        var strokes = CurrentLiteralStrokeData[0],
+            inkpoints = CurrentLiteralStrokeData[1];
+        
+        var m = new Morph();
+        m.isDraggable = true;
+        m.isEditable = true;
+        m.noticesTransparentClick = true;
+        var bounds = getStrokeBounds(strokes);
+        var topLeft = bounds.topLeft();
+        var extentPoint = bounds.extent();
+        m.color = new Color(0, 0, 0, 0);
+        m.setPosition(topLeft);
+        m.setExtent(extentPoint);
+        m.drawNew = function () {
+            var canvas, ext;
+            ext = extentPoint;
+            canvas = document.createElement('canvas');
+            canvas.width = ext.x;
+            canvas.height = ext.y;
+            this.image = canvas;
+            var context = this.image.getContext('2d');
+            context.fillStyle = this.color.toString();
+            context.fillRect(0, 0, this.width(), this.height());
+
+            strokes.forEach((stroke) => {
+                renderStroke(stroke, "black", stroke.drawingAttributes.size.width, context);
+            });
+            function renderStroke(stroke, color, width, ctx) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                var first = true;
+                stroke.getRenderingSegments().forEach((segment) => {
+                    if (first) {
+                        ctx.moveTo(segment.position.x - topLeft.x, segment.position.y - topLeft.y);
+                        first = false;
+                    } else {
+                        ctx.bezierCurveTo(segment.bezierControlPoint1.x - topLeft.x, segment.bezierControlPoint1.y - topLeft.y,
+                                            segment.bezierControlPoint2.x - topLeft.x, segment.bezierControlPoint2.y - topLeft.y,
+                                            segment.position.x - topLeft.x, segment.position.y - topLeft.y);
+                    }
+                });
+                ctx.stroke();
+                ctx.closePath();
+                ctx.restore();
+            }
+            if (this.cachedTexture) {
+                this.drawCachedTexture();
+            } else if (this.texture) {
+                this.drawTexture(this.texture);
+            }
+        }.bind(m);
+
+        this.root().add(m);
+        m.changed();
+        m.drawNew();
+        m.changed();
+
+        function getStrokeBounds(strokes) {
+            var x1 = Number.MAX_SAFE_INTEGER, y1 = Number.MAX_SAFE_INTEGER, x2 = 0, y2 = 0;
+            strokes.forEach((stroke) => {
+                if (stroke.boundingRect.x < x1) {
+                    x1 = stroke.boundingRect.x;
+                }
+                if (stroke.boundingRect.y < y1) {
+                    y1 = stroke.boundingRect.y;
+                }
+                if (stroke.boundingRect.x + stroke.boundingRect.width > x2) {
+                    x2 = stroke.boundingRect.x + stroke.boundingRect.width;
+                }
+                if (stroke.boundingRect.y + stroke.boundingRect.height > y2) {
+                    y2 = stroke.boundingRect.y + stroke.boundingRect.height;
+                }
+            });
+            return new Rectangle(x1, y1, x2, y2);
+        }
+    }
+
     // Here come the functions for responding to pen input - respondToPossibleText, findFunctionCandidates, fillHelpMeu
     Morph.prototype.respondToPossibleText = function (textCandidates, strokeBounds, thenCb) {
         var myFunctions = this.findFunctionCandidates(textCandidates, strokeBounds),
@@ -36,7 +116,7 @@
                 functions = funcNames.map((n) => {
                     return [this.makeFunctionFor(n), n]
                 });
-            functions.push([() => { eval("this." + text) }, text]);
+            // functions.push([() => { eval("this." + text) }, text]);
             return functions;
         }), true);
     }
@@ -106,6 +186,7 @@
     function ParameterQuestionMorph(string) {
         ParameterQuestionMorph.uber.init.call(this, string, 48, undefined, true);
         this.backgroundColor = (new Color(230, 230, 230, 128));
+        this.isEditable = true;
     }
 
     ParameterCallMorph.prototype.openInWorld = function (world) {
@@ -147,6 +228,12 @@
         });
     }
 
+    ParameterQuestionMorph.prototype.edit = function () {
+        var pos = this.position();
+        ParameterQuestionMorph.uber.edit.call(this);
+        this.setPosition(pos.add(new Point(30, 0)));
+    }
+
     // the world morph overrides the function candidates
     WorldMorph.prototype.findFunctionCandidates = function (textCandidates, strokeBounds) {
         var makeMorph = (cls) => {
@@ -170,7 +257,7 @@
                         return [this.makeFunctionFor(n), n];
                     }
                 });
-            functions.push([() => { eval("this." + text) }, text]);
+            // functions.push([() => { eval("this." + text) }, text]);
             return functions;
         }), true);
     }
@@ -178,13 +265,17 @@
     // various helpers
     function fuzzyMatchesFromList(text, list) {
         if (text.length < 2) return [];
-        text = text.toLowerCase().replace(/\s+/, "");
+        text = text.toLowerCase();
         return _.compact(list.map((k) => {
+            if (k.toLowerCase() === text) {
+                return k
+            }
             if (k.length < text.length * 2 &&
                 // split camelcase and underscores
                 k.replace(/([a-z](?=[A-Z]))/g, '$1 ').split(/\s|_/).concat([k]).find((part) => {
                     part = part.toLowerCase();
-                    return levenshteinDistance(part.slice(0, text.length - 1), text) < 2;
+                    return (levenshteinDistance(part.slice(0, text.replace(/\s+/g, "").length - 1), text.replace(/\s+/g, "")) < 2 ||
+                            levenshteinDistance(part.slice(0, text.length - 1), text) < 2);
                 })) {
                 return k;
             }

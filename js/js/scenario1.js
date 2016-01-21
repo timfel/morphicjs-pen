@@ -30,7 +30,7 @@
             // setup recognition and ink
             var pDollarRecognizer = new PDollarRecognizer();
             pDollarRecognizer.setupShapes();
-            var inkCanvasWrapper = new InkCanvasWrapper(world.worldCanvas, [pDollarRecognizer]),
+            var inkCanvasWrapper = new InkCanvasWrapper(world.worldCanvas, [pDollarRecognizer, new LiteralRecognizer()]),
                 assistantEnabled = false;
 
             // morphic specific draw test and redraw logic

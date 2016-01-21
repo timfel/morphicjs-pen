@@ -83,6 +83,7 @@
     <Content Include="..\..\..\SharedContent\js\css\default.css">
       <Link>css\default.css</Link>
     </Content>
+    <Content Include="js\literal_recognizer.js" />
     <Content Include="js\morphic.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

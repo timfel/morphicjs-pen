@@ -13,7 +13,7 @@
             new PDollarRecognizer.Point(45, 150, 3), new PDollarRecognizer.Point(50, 160, 3), new PDollarRecognizer.Point(60, 170, 3), new PDollarRecognizer.Point(80, 180, 3), new PDollarRecognizer.Point(90, 190, 3),
             new PDollarRecognizer.Point(90, 190, 4), new PDollarRecognizer.Point(110, 190, 4)
         )));
-        this.PointClouds.push(new PDollarRecognizer.PointCloud("makeRectangle", new Array( // shape of square
+        this.PointClouds.push(new PDollarRecognizer.PointCloud("rectangle", new Array( // shape of square
             new PDollarRecognizer.Point(30, 100, 1), new PDollarRecognizer.Point(170, 100, 1),
             new PDollarRecognizer.Point(170, 100, 2), new PDollarRecognizer.Point(170, 200, 2),
             new PDollarRecognizer.Point(170, 200, 3), new PDollarRecognizer.Point(30, 200, 3),
