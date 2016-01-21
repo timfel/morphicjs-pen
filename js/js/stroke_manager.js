@@ -2,6 +2,9 @@
     "use strict";
     exports.StrokeManager = StrokeManager;
 
+    // global lock
+    var currentlyRecognizing = false;
+
     // Tied to Microsoft Ink Manager for Bezier curve fitting and stroke grouping
     function StrokeManager(recognizers) {
         this.inkManager = new Windows.UI.Input.Inking.InkManager();
@@ -63,16 +66,18 @@
         });
     }
 
-    StrokeManager.prototype.recognize = function() {
+    StrokeManager.prototype.recognize = function () {
         return new Promise((resolve, reject) => {
-            if (this.currentRecognitionResults !== null || this.inkManager.getStrokes().length === 0) {
+            if (currentlyRecognizing || this.inkManager.getStrokes().length === 0) {
                 reject(Error("recognize operation already running or no strokes available"))
             } else {
+                currentlyRecognizing = true;
                 var recognizersLeftToProcess = 0;
                 this.currentRecognitionResults = [];
 
                 this.determineStrokeGroups().then(
                     (strokeGroups) => {
+                        currentlyRecognizing = false;
                         strokeGroups.forEach((strokeGroup, resultId) => {
                             var inkpoints = _.flatten(strokeGroup.map((stroke, idx) => {
                                 return stroke.getInkPoints().map((pt) => {
@@ -96,12 +101,12 @@
                                             resolve(finishRecognition(strokeGroups));
                                         }
                                         reject(e);
-                                    })
+                                    });
                             });
                         });
                     },
                     (e) => {
-                        this.currentRecognitionResults = null;
+                        currentlyRecognizing = false;
                         reject(Error("Could not determine stroke groups"));
                     }
                 )
@@ -113,7 +118,6 @@
                             textCandidates: r
                         }
                     });
-                    this.currentRecognitionResults = null;
                     return results;
                 }
             }
@@ -141,11 +145,7 @@
         return new Promise((resolve, reject) => {
             try {
                 var result = this.Recognize(inkpoints);
-                if (result.Score > 0.7) {
-                    resolve([result.Name]);
-                } else {
-                    resolve([]);
-                }
+                resolve([result.Name]);
             } catch (e) {
                 reject(e);
             }
