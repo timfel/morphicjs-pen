@@ -212,6 +212,17 @@
                 }
             }, "Run"],
             [() => {
+                var message = this.text + "(";
+                this.children.forEach((m) => { message += m.text + "," });
+                message = message.slice(0, message.length - 1);
+                message += ")";
+                this.target.fps = 10;
+                this.target.step = () => {
+                    eval("this.target." + message);
+                }
+                this.destroy();
+            }, "Start Ticking"],
+            [() => {
                 this.destroy();
             }, "Cancel"]
         ]
