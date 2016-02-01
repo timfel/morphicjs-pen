@@ -125,21 +125,22 @@
         }), true);
     }
 
-    Morph.prototype.makeFunctionFor = function (funcName) {
-        var names = getParamNames(this[funcName]);
+    Morph.prototype.makeFunctionFor = function (funcName, isConstructor, rcvr) {
+        rcvr = rcvr || this;
+        var names = getParamNames(rcvr[funcName]);
         if (names.length === 0) {
             // simple case, just call
             return (() => {
                 return {
                     text: funcName + "()",
-                    value: this[funcName]()
+                    value: (isConstructor ? new rcvr[funcName]() : rcvr[funcName]())
                 }
             });
         } else {
             // ask for parameters
             return (() => {
                 var pos = this.position();
-                var callM = new ParameterCallMorph(this, funcName);
+                var callM = new ParameterCallMorph(rcvr, isConstructor ? "new " + funcName : funcName);
                 callM.setPosition(pos);
                 pos = pos.add(new Point(callM.width() + 8, 0));
                 names.forEach((s) => {
@@ -172,6 +173,7 @@
                     if (result !== no_history()) {
                         var hmorph = new HistoryMorph(
                             '"' + funcAndText[1] + '" → ' + result.text + " = `" + result.value + "'",
+                            result.text,
                             funcAndText[0]
                         );
                         this.root().sidePane.add(hmorph);
@@ -188,18 +190,23 @@
     // these morphs track the history of executions
     var HistoryMorph;
     HistoryMorph.prototype = new TextMorph();
+    HistoryMorph.prototype.constructor = HistoryMorph;
     HistoryMorph.uber = TextMorph.prototype;
-    function HistoryMorph(string, func) {
-        this.init(string, func);
+    function HistoryMorph(string, message, func) {
+        this.init(string, message, func);
     }
-    HistoryMorph.prototype.init = function (string, func) {
+    HistoryMorph.prototype.init = function (string, message, func) {
         this.func = func;
+        this.message = message;
         HistoryMorph.uber.init.call(this, string, 22);
         this.backgroundColor = new Color(200, 200, 200, 128);
         this.changed();
         this.drawNew();
         this.changed();
         this.isTemplate = true;
+    }
+    HistoryMorph.prototype.getMessage = function () {
+        return this.message;
     }
     HistoryMorph.prototype.stickToTop = function () {
         this.setPosition(this.parent.children.reduce((previous, current) => {
@@ -228,6 +235,7 @@
         this.target = target;
         ParameterCallMorph.uber.init.call(this, string, 48, undefined, undefined, true);
         this.backgroundColor = (new Color(230, 230, 230, 128));
+        this.isDraggable = true;
     }
 
     function ParameterQuestionMorph(string) {
@@ -244,6 +252,14 @@
         this.changed(); this.drawNew(); this.changed();
     }
 
+    ParameterCallMorph.prototype.getMessage = function () {
+        var message = this.text + "(";
+        this.children.forEach((m) => { if (m.text) message += m.text + "," });
+        message = message.slice(0, message.length - 1);
+        message += ")";
+        return message;
+    }
+
     ParameterCallMorph.prototype.findFunctionCandidates = function (textCandidates, strokeBounds) {
         var results = [];
         if (textCandidates.find((txt) => { return txt === "destroy" || txt === "line" })) {
@@ -251,15 +267,18 @@
         }
         if (textCandidates.find((txt) => { return txt === "tickmark" })) {
             results.push([() => {
-                var message = this.text + "(";
-                this.children.forEach((m) => { message += m.text + "," });
-                message = message.slice(0, message.length - 1);
-                message += ")";
+                var message = this.getMessage();
+                var evalCode;
+                if (message.startsWith("new ")) {
+                    evalCode = message.replace("new ", "new this.target.");
+                } else {
+                    evalCode = "this.target." + message;
+                }
                 this.destroy();
                 try {
                     return {
                         text: message,
-                        value: eval("this.target." + message)
+                        value: eval(evalCode)
                     }
                 } catch (e) {
                     world.inform("Could not eval target." + message + ".\nThe error was " + e);
@@ -267,6 +286,16 @@
             }, "Run"]);
         }
         return results;
+    }
+
+    ParameterQuestionMorph.prototype.wantsDropOf = function (aMorph) {
+        if (typeof(aMorph.getMessage) == "function") {
+            this.text = aMorph.getMessage();
+            this.changed();
+            this.drawNew();
+            this.changed();
+            setTimeout(() => { aMorph.destroy(); }, 100);
+        }
     }
 
     ParameterQuestionMorph.prototype.findFunctionCandidates = function (textCandidates, strokeBounds) {
@@ -301,15 +330,20 @@
                 value: m
             }
         };
-        var funcList = ["rectangle", "circle", "string"].concat(_.functions(this)),
-            makerFunctions = [Morph, CircleBoxMorph, String].map((cls) => { return () => { makeMorph(cls) } });
+        var funcList = ["rectangle", "circle", "string"].concat(_.functions(this));
+        var globalClasses = _.functions(window).filter((f) => {
+            return /^[A-Z]/.test(f);
+        });
+        var makerFunctions = [Morph, CircleBoxMorph, String].map((cls) => { return () => { makeMorph(cls) } });
 
         return _.flatten(textCandidates.map((text) => {
-            var funcNames = fuzzyMatchesFromList(text, funcList),
+            var funcNames = fuzzyMatchesFromList(text, funcList.concat(globalClasses)),
                 functions = funcNames.map((n) => {
                     var idx = funcList.indexOf(n);
                     if (idx >= 0 && idx < makerFunctions.length) {
                         return [makerFunctions[idx], "Make new " + n]
+                    } else if (globalClasses.indexOf(n) >= 0) {
+                        return [this.makeFunctionFor(n, true, window), "new " + n]
                     } else {
                         return [this.makeFunctionFor(n), n];
                     }
