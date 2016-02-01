@@ -220,6 +220,31 @@
     HistoryMorph.prototype.mouseClickLeft = function () {
         this.func();
     }
+    HistoryMorph.prototype.findFunctionCandidates = function (textCandidates, strokeBounds) {
+        var results = [];
+        if (textCandidates.find((txt) => { return txt === "T" || txt === "tick" })) {
+            results.push([() => {
+                var runners = this.parent.children.filter((m) => {
+                    return ((m instanceof HistoryMorph) && 
+                            m.bounds.intersects(strokeBounds));
+                });
+                this.fps = 5;
+                var idx = -1;
+                this.step = () => {
+                    idx = (idx + 1) % runners.length;
+                    runners[idx].func();
+                }
+                return no_history();
+            }, "Start ticking"]);
+        }
+        if (textCandidates.find((txt) => { return txt === "S" || txt === "stop" })) {
+            results.push([() => {
+                this.step = () => { };
+                return no_history();
+            }, "Stop ticking"]);
+        }
+        return results;
+    }
 
     // these morphs draw parameterized methods
     var ParameterQuestionMorph,
@@ -334,7 +359,7 @@
         var globalClasses = _.functions(window).filter((f) => {
             return /^[A-Z]/.test(f);
         });
-        var makerFunctions = [Morph, CircleBoxMorph, String].map((cls) => { return () => { makeMorph(cls) } });
+        var makerFunctions = [Morph, CircleBoxMorph, String].map((cls) => { return () => { return makeMorph(cls) } });
 
         return _.flatten(textCandidates.map((text) => {
             var funcNames = fuzzyMatchesFromList(text, funcList.concat(globalClasses)),
