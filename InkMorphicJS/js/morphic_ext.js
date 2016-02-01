@@ -1,6 +1,10 @@
 ﻿(function () {
     "use strict";
 
+    function no_history() {
+        return "no history";
+    }
+
     // determines if it is ok to draw over this morph
     Morph.prototype.allowsDrawingOver = function () {
         return true;
@@ -125,7 +129,12 @@
         var names = getParamNames(this[funcName]);
         if (names.length === 0) {
             // simple case, just call
-            return (() => { this[funcName]() });
+            return (() => {
+                return {
+                    text: funcName + "()",
+                    value: this[funcName]()
+                }
+            });
         } else {
             // ask for parameters
             return (() => {
@@ -140,6 +149,7 @@
                     callM.add(m);
                 });
                 callM.openInWorld(this.root());
+                return no_history();
             });
         }
 
@@ -158,13 +168,50 @@
         functionList.forEach((funcAndText) => {
             if (names.indexOf(funcAndText[1]) < 0) {
                 m.addItem(funcAndText[1], () => {
-                    funcAndText[0]();
+                    var result = funcAndText[0]();
+                    if (result !== no_history()) {
+                        var hmorph = new HistoryMorph(
+                            '"' + funcAndText[1] + '" → ' + result.text + " = `" + result.value + "'",
+                            funcAndText[0]
+                        );
+                        this.root().sidePane.add(hmorph);
+                        hmorph.stickToTop();
+                    }
                     thenDo();
                 });
                 names.push(funcAndText[1]);
             }
         });
         return m;
+    }
+
+    // these morphs track the history of executions
+    var HistoryMorph;
+    HistoryMorph.prototype = new TextMorph();
+    HistoryMorph.uber = TextMorph.prototype;
+    function HistoryMorph(string, func) {
+        this.init(string, func);
+    }
+    HistoryMorph.prototype.init = function (string, func) {
+        this.func = func;
+        HistoryMorph.uber.init.call(this, string, 22);
+        this.backgroundColor = new Color(200, 200, 200, 128);
+        this.changed();
+        this.drawNew();
+        this.changed();
+        this.isTemplate = true;
+    }
+    HistoryMorph.prototype.stickToTop = function () {
+        this.setPosition(this.parent.children.reduce((previous, current) => {
+            if (current !== this) {
+                return current.bottomLeft().max(previous);
+            } else {
+                return previous;
+            }
+        }, this.parent.topLeft()).add(new Point(0, 2)));
+    }
+    HistoryMorph.prototype.mouseClickLeft = function () {
+        this.func();
     }
 
     // these morphs draw parameterized methods
@@ -198,34 +245,28 @@
     }
 
     ParameterCallMorph.prototype.findFunctionCandidates = function (textCandidates, strokeBounds) {
-        return [
-            [() => {
+        var results = [];
+        if (textCandidates.find((txt) => { return txt === "destroy" || txt === "line" })) {
+            results.push([() => { this.destroy(); return no_history(); }, "Cancel"])
+        }
+        if (textCandidates.find((txt) => { return txt === "tickmark" })) {
+            results.push([() => {
                 var message = this.text + "(";
                 this.children.forEach((m) => { message += m.text + "," });
                 message = message.slice(0, message.length - 1);
                 message += ")";
                 this.destroy();
                 try {
-                    eval("this.target." + message);
+                    return {
+                        text: message,
+                        value: eval("this.target." + message)
+                    }
                 } catch (e) {
                     world.inform("Could not eval target." + message + ".\nThe error was " + e);
                 }
-            }, "Run"],
-            [() => {
-                var message = this.text + "(";
-                this.children.forEach((m) => { message += m.text + "," });
-                message = message.slice(0, message.length - 1);
-                message += ")";
-                this.target.fps = 10;
-                this.target.step = () => {
-                    eval("this.target." + message);
-                }
-                this.destroy();
-            }, "Start Ticking"],
-            [() => {
-                this.destroy();
-            }, "Cancel"]
-        ]
+            }, "Run"]);
+        }
+        return results;
     }
 
     ParameterQuestionMorph.prototype.findFunctionCandidates = function (textCandidates, strokeBounds) {
@@ -235,6 +276,7 @@
                 this.changed();
                 this.drawNew();
                 this.changed();
+                return no_history();
             }, text]
         });
     }
@@ -254,6 +296,10 @@
             m.setPosition(strokeBounds.topLeft());
             m.setExtent(strokeBounds.extent());
             this.add(m);
+            return {
+                text: cls + "",
+                value: m
+            }
         };
         var funcList = ["rectangle", "circle", "string"].concat(_.functions(this)),
             makerFunctions = [Morph, CircleBoxMorph, String].map((cls) => { return () => { makeMorph(cls) } });

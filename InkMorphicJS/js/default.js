@@ -66,6 +66,14 @@
 	        world.onNextStep = () => { world.onNextStep = cb };
 	    }
 
+	    var executionHistory = new ScrollFrameMorph();
+	    executionHistory.setWidth(300);
+	    executionHistory.setHeight(world.height());
+	    executionHistory.setPosition(world.topRight().subtract(new Point(300, 0)));
+	    executionHistory.setColor(new Color(255, 255, 255));
+	    world.add(executionHistory);
+	    world.sidePane = executionHistory.contents;
+
 	    // start running
 	    loop();
 	    function loop() {
