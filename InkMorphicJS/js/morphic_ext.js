@@ -107,7 +107,7 @@
     Morph.prototype.respondToPossibleText = function (textCandidates, strokeBounds, thenCb) {
         var myFunctions = this.findFunctionCandidates(textCandidates, strokeBounds),
             menu = this.fillHelpMenu(myFunctions, thenCb);
-        menu.popup(this.root(), this.root().topLeft());
+        menu.popup(this.root(), this.root().bottomLeft().subtract(new Point(0, menu.height())));
     }
 
     Morph.prototype.findFunctionCandidates = function (textCandidates, strokeBounds) {
