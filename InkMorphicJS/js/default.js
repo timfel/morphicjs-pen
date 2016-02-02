@@ -84,10 +84,15 @@
 	            inkCanvasWrapper.recognize().then((results, wrapper) => {
 	                results.forEach((result) => {
 	                    var strokes = result.strokes,
-                            target = world.topMorphAt(new Point(strokes[0].boundingRect.x, strokes[0].boundingRect.y));
+                            firstStrokePt = result.strokes[0].getInkPoints()[0],
+                            lastStroke = result.strokes[result.strokes.length - 1],
+                            lastStrokePt = lastStroke.getInkPoints()[lastStroke.getInkPoints().length - 1],
+                            startPt = new Point(firstStrokePt.position.x, firstStrokePt.position.y),
+                            endPt = new Point(lastStrokePt.position.x, lastStrokePt.position.y),
+                            target = world.topMorphAt(startPt);
 	                    target.respondToPossibleText(result.textCandidates, getStrokeBounds(strokes), () => {
 	                        inkCanvasWrapper.deleteStrokes(strokes);
-	                    });
+	                    }, startPt, endPt);
 	                });
 	            });
 	        } else {

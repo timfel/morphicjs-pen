@@ -24,7 +24,13 @@
         )));
         this.PointClouds.push(new PointCloud("tickmark", new Array( // shape of \/
             new Point(50, 100, 1), new Point(100, 150, 1),
-		    new Point(100, 150, 2), new Point(0, 200, 2)
+		    new Point(100, 150, 1), new Point(0, 200, 1)
+        )));
+        this.PointClouds.push(new PointCloud("squiggle", new Array( // horizontal
+            new Point(0, 20, 1), new Point(20, 0, 1), new Point(20, 20, 1), new Point(40, 0, 1), new Point(40, 20, 1), new Point(60, 0, 1), new Point(60, 20, 1), new Point(80, 0, 1)
+        )));
+        this.PointClouds.push(new PointCloud("squiggle", new Array( // vertical
+            new Point(0, 0, 1), new Point(20, 20, 1), new Point(0, 40, 1), new Point(20, 60, 1), new Point(0, 80, 1)
         )));
     }
 }).call(this);

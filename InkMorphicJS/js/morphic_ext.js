@@ -108,10 +108,96 @@
     }
 
     // Here come the functions for responding to pen input - respondToPossibleText, findFunctionCandidates, fillHelpMeu
-    Morph.prototype.respondToPossibleText = function (textCandidates, strokeBounds, thenCb) {
-        var myFunctions = this.findFunctionCandidates(textCandidates, strokeBounds),
-            menu = this.fillHelpMenu(myFunctions, thenCb);
+    Morph.prototype.respondToPossibleText = function (textCandidates, strokeBounds, thenCb, startPt, endPt) {
+        var myFunctions = this.findFunctionCandidates(textCandidates, strokeBounds);
+        if (textCandidates.indexOf("squiggle") >= 0) {
+            myFunctions = myFunctions.concat(this.proposeConnectionTo(this.root().topMorphAt(endPt), thenCb));
+        }
+        var menu = this.fillHelpMenu(myFunctions, thenCb);
         menu.popup(this.root(), this.root().bottomLeft().subtract(new Point(0, menu.height())));
+    }
+
+    Morph.prototype.proposeConnectionTo = function (anotherMorph, thenDo) {
+        return [[
+            () => {
+                var m1, m2, cancelCb = () => {
+                    m1.destroy();
+                    m2.destroy();
+                    thenDo();
+                }
+                var eventName, fun, clickFunc;
+
+                var m1 = new MenuMorph(null, 'Which event should we react to?'),
+                    events = ["mouseClickLeft", "mouseClickRight"];
+                events.forEach((n) => {
+                    m1.addItem(n, () => {
+                        eventName = n;
+                        clickFunc();
+                    });
+                });
+                m1.addLine();
+                m1.addItem("Cancel", cancelCb);
+                m1.isListContents = true;
+                m1.popup(this, this.bottomLeft());
+
+                var m2 = new MenuMorph(null, 'Which function should we trigger?'),
+                    funcs = _.functions(anotherMorph).filter((funcName) => {
+                        return getParamNames(anotherMorph[funcName]).length === 0;
+                    });
+                funcs.forEach((n) => {
+                    m2.addItem(n, () => {
+                        fun = () => { anotherMorph[n]() };
+                        clickFunc();
+                    });
+                });
+                m2.addLine();
+                m2.addItem("... or drop some code tile here ...", () => { });
+                m2.addLine();
+                m2.addItem("Cancel", cancelCb);
+                m2.isListContents = true
+                m2.wantsDropOf = function (aMorph) {
+                    if (typeof (aMorph.getMessage) == "function") {
+                        var text = aMorph.getMessage(),
+                            dropItem = this.children[this.children.length - 3];
+                        dropItem.labelString = text;
+                        dropItem.createLabel();
+                        fun = () => {
+                            eval("anotherMorph." + text);
+                        }
+                        clickFunc();
+                        dropItem.mouseDownLeft();
+                        dropItem.mouseClickLeft();
+                        setTimeout(() => { aMorph.destroy(); }, 100);
+                    }
+                }
+                if (this === anotherMorph) {
+                    m2.popup(m1, anotherMorph.bottomRight().add(new Point(m2.width(), 0)));
+                } else {
+                    m2.popup(anotherMorph, anotherMorph.bottomLeft());
+                }
+
+                clickFunc = () => {
+                    clickFunc = () => {
+                        clickFunc = () => { };
+                        var doIt = new MenuMorph(null, "");
+                        doIt.addItem("Connect!", () => {
+                            var prevEvent = this[eventName];
+                            this[eventName] = () => {
+                                fun();
+                                if (prevEvent) prevEvent();
+                            }
+                            m1.destroy();
+                            m2.destroy();
+                            thenDo();
+                        });
+                        doIt.popup(this.root(), this.root().bottomLeft().subtract(new Point(0, doIt.height())));
+                    };
+                };
+
+                return no_history();
+            },
+            "Connect ..."
+        ]]
     }
 
     Morph.prototype.findFunctionCandidates = function (textCandidates, strokeBounds) {
@@ -152,14 +238,6 @@
                 callM.openInWorld(this.root());
                 return no_history();
             });
-        }
-
-        function getParamNames(func) {
-            var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg,
-                ARGUMENT_NAMES = /([^\s,]+)/g,
-                fnStr = func.toString().replace(STRIP_COMMENTS, ''),
-                result = fnStr.slice(fnStr.indexOf('(') + 1, fnStr.indexOf(')')).match(ARGUMENT_NAMES);
-            return result || [];
         }
     }
 
@@ -244,6 +322,14 @@
             }, "Stop ticking"]);
         }
         return results;
+    }
+    HistoryMorph.prototype.reactToTemplateCopy = function () {
+        // when we're a copy, we also react normally (but still work for ticking/stop-ticking
+        var oldFfc = this.findFunctionCandidates.bind(this);
+        this.findFunctionCandidates = () => {
+            var r = oldFfc.apply(this, arguments);
+            return r.concat(Morph.prototype.findFunctionCandidates.apply(this, arguments));
+        }
     }
 
     // these morphs draw parameterized methods
@@ -422,5 +508,13 @@
             }
             return matrix[b.length][a.length];
         };
+    }
+
+    function getParamNames(func) {
+        var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg,
+            ARGUMENT_NAMES = /([^\s,]+)/g,
+            fnStr = func.toString().replace(STRIP_COMMENTS, ''),
+            result = fnStr.slice(fnStr.indexOf('(') + 1, fnStr.indexOf(')')).match(ARGUMENT_NAMES);
+        return result || [];
     }
 })();
