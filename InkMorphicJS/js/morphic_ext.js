@@ -385,6 +385,7 @@
                 } else {
                     evalCode = "this.target." + message;
                 }
+                var world = this.root();
                 this.destroy();
                 try {
                     return {
