@@ -91,6 +91,10 @@
                                 recognizersLeftToProcess++;
                                 r.recognizeInk(inkpoints, strokeGroup).then(
                                     (results) => {
+                                        if (this.currentRecognitionResults.length == 0) {
+                                            this.currentRecognitionResults[0] = [];
+                                            resultId = 0;
+                                        }
                                         this.currentRecognitionResults[resultId] = this.currentRecognitionResults[resultId].concat(results);
                                         if (--recognizersLeftToProcess <= 0) {
                                             resolve(finishRecognition(strokeGroups));
